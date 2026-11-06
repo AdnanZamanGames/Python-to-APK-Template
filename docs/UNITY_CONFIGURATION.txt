@@ -1,0 +1,12 @@
+Unity Dashboard configuration:
+Game ID (Android): 800427297
+Rewarded placement: BP_Rewarded_Android
+Interstitial placement: BP_Interstitial_Android
+Banner placement: BP_Banner_Android (not integrated in this first build)
+
+Test mode:
+Monetization > Settings > Test devices > select Blocky Platformer > Test mode >
+Override client test mode > Force test mode ON for all devices.
+
+The Python config also passes testMode=true to the Unity SDK.
+  
