@@ -9,7 +9,7 @@ permissions:
 
 env:
   CYTHON_LANGUAGE_LEVEL: "3"
-  PYTHONFORANDROID_PREREQUISITES_INSTALL_INTERACTIVE: "0"
+  PYTHONUNBUFFERED: "1"
   USE_COLORS: "0"
 
 jobs:
@@ -51,9 +51,10 @@ jobs:
         pip install buildozer
         pip install cython==0.29.33
 
-    - name: Configure Android SDK license
+    - name: Accept Android SDK licenses
       run: |
-        sed -i '/^\[app\]/a android.accept_sdk_license = True' buildozer.spec
+        mkdir -p "$HOME/.buildozer"
+        touch "$HOME/.buildozer/android/platform/android-sdk/licenses/android-sdk-license"
 
     - name: Check environment
       run: |
@@ -63,35 +64,57 @@ jobs:
         buildozer --version
 
     - name: Build Android APK
+      id: build
+      continue-on-error: true
       run: |
         set -o pipefail
         buildozer -v android debug 2>&1 | tee buildozer.log
 
-    - name: Find APK
+    - name: Create 200-line error log
       if: always()
-      id: check-build
       run: |
-        if find bin -maxdepth 1 -name "*.apk" -print -quit | grep -q .; then
-          echo "BUILD_SUCCESS=true" >> "$GITHUB_OUTPUT"
-          ls -lh bin/*.apk
+        if [ -f buildozer.log ]; then
+          tail -n 200 buildozer.log > build-error.log
         else
-          echo "BUILD_SUCCESS=false" >> "$GITHUB_OUTPUT"
-          echo "APK was not generated."
+          echo "Buildozer log was not created." > build-error.log
         fi
 
+        echo "========== LAST 200 LINES =========="
+        cat build-error.log
+        echo "===================================="
+
+    - name: Upload 200-line error log
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: Build-Error-200-Lines
+        path: build-error.log
+        retention-days: 7
+
+    - name: Upload complete build log
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: Complete-Build-Log
+        path: buildozer.log
+        if-no-files-found: ignore
+        retention-days: 3
+
     - name: Upload APK
-      if: steps.check-build.outputs.BUILD_SUCCESS == 'true'
+      if: success() || steps.build.outcome == 'success'
       uses: actions/upload-artifact@v6
       with:
         name: Blocky-Platformer-APK
         path: bin/*.apk
+        if-no-files-found: error
         retention-days: 30
 
-    - name: Upload build logs
+    - name: Report build result
       if: always()
-      uses: actions/upload-artifact@v6
-      with:
-        name: Blocky-Platformer-Build-Logs
-        path: buildozer.log
-        if-no-files-found: ignore
-        retention-days: 7
+      run: |
+        if [ "${{ steps.build.outcome }}" = "success" ]; then
+          echo "APK build completed."
+        else
+          echo "APK build failed. Download Build-Error-200-Lines."
+          exit 1
+        fi
